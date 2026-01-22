@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Itkhori Sangam Darshan – Path Finder</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; background:#f0f0f0; }
+
+    /* Map Fullscreen */
+    #map { height: 75vh; width: 100%; }
+
+    /* Control Panel */
+    .panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 999;
+      background: rgba(255,255,255,0.96);
+      padding: 12px 14px;
+      border-radius: 12px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+      width: 370px;
+    }
+
+    .panel h3 { margin: 0 0 6px 0; font-size: 16px; }
+    .panel small { color:#333; line-height:1.45; display:block; }
+
+    .hint {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 10px;
+      background:#f3f4f6;
+      font-size: 13px;
+    }
+
+    .selected { font-weight: 800; color:#b91c1c; }
+
+    .btns {
+      margin-top: 10px;
+      display:flex;
+      gap:10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+
+    .btn-clear { background:#111827; color:white; }
+    .btn-fit   { background:#2563eb; color:white; }
+    .btn-net   { background:#059669; color:white; }
+
+    /* Always-visible labels */
+    .point-label {
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(0,0,0,0.18);
+      border-radius: 8px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 800;
+      color: #111827;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      white-space: nowrap;
+      pointer-events: none; /* ensures label never blocks clicks */
+    }
+
+    /* More Info Section */
+    .more-info {
+      max-width:800px;
+      margin:20px auto 40px auto;
+      padding:20px 18px;
+      font-size:1rem;
+      line-height:1.6;
+      color:#111827;
+      background:#fff8e1;
+      border-radius:12px;
+      box-shadow:0 6px 18px rgba(0,0,0,0.15);
+      text-align:center;
+    }
+
+    .more-info a {
+      color:#2563eb;
+      font-weight:700;
+      text-decoration:none;
+    }
+
+    footer {
+      text-align:center;
+      padding:16px;
+      font-size:0.85rem;
+      background: rgba(0,0,0,0.08);
+      color:#111827;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Control Panel -->
+  <div class="panel">
+    <h3>Itkhori Sangam Darshan – Path Finder</h3>
+    <small>
+      Click on any <b>two temple/places</b> to generate a connected path.<br/>
+      Path is drawn as <b>straight line segments</b> using internal connectivity.
+    </small>
+
+    <div class="hint">
+      Start Point: <span id="a" class="selected">None</span><br/>
+      End Point: <span id="b" class="selected">None</span>
+    </div>
+
+    <div class="btns">
+      <button class="btn-clear" onclick="clearSelection()">Clear Route</button>
+      <button class="btn-fit" onclick="fitAll()">Fit All Points</button>
+      <button class="btn-net" onclick="toggleNetwork()">Show/Hide Network</button>
+    </div>
+
+    <small style="margin-top:10px;">
+      Demo Version: Replace rough points and connections with final GPS list.
+    </small>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- More Info Section -->
+  <section class="more-info">
+    अधिक जानकारी के लिए आप <a href="index.html">मुख्य पेज</a> पर लौट सकते हैं
+    और अन्य वीडियो जैसे Intro, Darshan और Gallery देख सकते हैं।
+  </section>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ------------------- Sample Points -------------------
+    const points = [
+      { id: "bhadrakali", name: "Maa Bhadrakali Mandir",  lat: 24.2728, lon: 85.1408 },
+      { id: "shiv",       name: "Shiv Mandir",           lat: 24.2738, lon: 85.1420 },
+      { id: "janki",      name: "Ram–Janki Mandir",      lat: 24.2719, lon: 85.1450 },
+      { id: "shani",      name: "Shani Mandir",          lat: 24.2752, lon: 85.1440 },
+      { id: "stupa",      name: "Kotheshwar Nath Stupa", lat: 24.2734, lon: 85.1417 },
+      { id: "sahasra",    name: "Sahasralinga",          lat: 24.2740, lon: 85.1397 },
+      { id: "market",     name: "Itkhori Market",        lat: 24.2709, lon: 85.1419 },
+      { id: "gate",       name: "Temple Entry Gate",     lat: 24.2718, lon: 85.1398 },
+      { id: "river",      name: "Mahane River View",     lat: 24.2668, lon: 85.1382 },
+      { id: "bhaduli",    name: "Bhaduli Village",       lat: 24.2790, lon: 85.1432 }
+    ];
+
+    const pointById = Object.fromEntries(points.map(p => [p.id, p]));
+
+    const connections = [
+      ["bhadrakali", "shiv"],
+      ["shiv", "janki"],
+      ["bhadrakali", "stupa"],
+      ["bhadrakali", "gate"],
+      ["gate", "market"],
+      ["market", "janki"],
+      ["shiv", "shani"],
+      ["stupa", "sahasra"],
+      ["sahasra", "gate"],
+      ["gate", "river"],
+      ["shiv", "bhaduli"]
+    ];
+
+    const graph = {};
+    points.forEach(p => graph[p.id] = []);
+    connections.forEach(([a, b]) => { graph[a].push(b); graph[b].push(a); });
+
+    // ------------------- Map Init -------------------
+    const map = L.map('map').setView([24.2728, 85.1408], 14);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom:20, attribution:"&copy; OpenStreetMap contributors" }).addTo(map);
+
+    const markerLayer  = L.layerGroup().addTo(map);
+    const routeLayer   = L.layerGroup().addTo(map);
+    const networkLayer = L.layerGroup().addTo(map);
+
+    let networkVisible = false;
+    let selectedA = null;
+    let selectedB = null;
+
+    // ------------------- Add Markers -------------------
+    points.forEach(p => {
+      const marker = L.marker([p.lat, p.lon]).addTo(markerLayer);
+      marker.bindTooltip(p.name, { permanent:true, direction:"right", offset:[14,0], className:"point-label", interactive:false });
+      marker.bindPopup(`<b>${p.name}</b><br/>ID: ${p.id}<br/><small>Click to select</small>`);
+      marker.on("click", () => onPointClick(p));
+    });
+
+    fitAll();
+
+    function updateStatus() {
+      document.getElementById("a").textContent = selectedA ? selectedA.name : "None";
+      document.getElementById("b").textContent = selectedB ? selectedB.name : "None";
+    }
+
+    function clearSelection() {
+      selectedA = null; selectedB = null;
+      routeLayer.clearLayers(); updateStatus();
+    }
+
+    function fitAll() {
+      const bounds = L.latLngBounds(points.map(p=>[p.lat,p.lon]));
+      map.fitBounds(bounds.pad(0.25));
+    }
+
+    function onPointClick(p) {
+      if(!selectedA){ selectedA=p; updateStatus(); return; }
+      if(!selectedB){
+        if(p.id===selectedA.id){ alert("Please select a different end point."); return; }
+        selectedB=p; updateStatus(); buildAndDrawRoute(selectedA.id,selectedB.id); return;
+      }
+      selectedA=p; selectedB=null; routeLayer.clearLayers(); updateStatus();
+    }
+
+    function shortestPathBFS(startId,endId){
+      const queue=[startId], visited=new Set([startId]), parent={};
+      while(queue.length){
+        const cur=queue.shift();
+        if(cur===endId) break;
+        for(const nb of graph[cur]){
+          if(!visited.has(nb)){ visited.add(nb); parent[nb]=cur; queue.push(nb); }
+        }
+      }
+      if(!visited.has(endId)) return null;
+      const path=[endId]; while(path[path.length-1]!==startId){ path.push(parent[path[path.length-1]]); }
+      return path.reverse();
+    }
+
+    function buildAndDrawRoute(startId,endId){
+      routeLayer.clearLayers();
+      const path=shortestPathBFS(startId,endId);
+      if(!path){ alert("No connected path found in internal network!"); return; }
+      const latlngs=path.map(id=>[pointById[id].lat,pointById[id].lon]);
+      const routeLine=L.polyline(latlngs,{weight:7, opacity:0.95}).addTo(routeLayer);
+      const routeText=path.map(id=>pointById[id].name).join(" → ");
+      routeLine.bindPopup(`<b>Connected Path</b><br/>${routeText}`).openPopup();
+      map.fitBounds(routeLine.getBounds().pad(0.25));
+    }
+
+    function toggleNetwork(){
+      networkVisible=!networkVisible;
+      networkLayer.clearLayers();
+      if(networkVisible){
+        connections.forEach(([a,b])=>{
+          const A=pointById[a], B=pointById[b];
+          L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{weight:3,opacity:0.6,dashArray:"7 7"}).addTo(networkLayer);
+        });
+      }
+    }
+
+    updateStatus();
+  </script>
+
+  <footer>
+    © 2026 Ithkhori – Ek Pahchan | QR / Barcode Enabled Digital Experience
+  </footer>
+</body>
+</html>

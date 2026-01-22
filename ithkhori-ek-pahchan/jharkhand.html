@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Itkhori Sangam Darshan – Route Explorer</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    body { margin:0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; width: 100vw; }
+
+    /* ===== Panel styling ===== */
+    .panel{
+      position:absolute; top:12px; left:12px; z-index:999;
+      width: 95%;
+      max-width: 440px;
+      background: rgba(255,255,255,0.96);
+      border-radius: 16px;
+      padding: 12px 14px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+      font-size: 14px;
+    }
+    .title{ font-size: 16px; font-weight: 900; margin: 0 0 6px 0; }
+    .sub{ font-size: 13px; color:#333; line-height: 1.35; }
+
+    .tabs{ display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+    .tab{
+      cursor:pointer;
+      border:none;
+      padding:10px 12px;
+      border-radius: 999px;
+      font-weight:900;
+      font-size: 13px;
+      background:#e5e7eb;
+      color:#111827;
+      transition: all 0.2s;
+    }
+    .tab:hover{ background:#111827; color:white; }
+    .tab.active{ background:#111827; color:white; }
+
+    .row{ margin-top:10px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    button{
+      cursor:pointer; border:none;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 900;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+    .btn-run{ background:#2563eb; color:white; }
+    .btn-clear{ background:#b91c1c; color:white; }
+    .btn-net{ background:#059669; color:white; }
+    .btn-road{ background:#111827; color:white; }
+
+    select{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(0,0,0,0.2);
+      font-weight: 800;
+      width: 100%;
+      outline: none;
+    }
+
+    .hint{
+      margin-top:10px;
+      background:#f3f4f6;
+      border-radius: 14px;
+      padding: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .label{
+      background: rgba(255,255,255,0.95);
+      border: 1px solid rgba(0,0,0,0.15);
+      border-radius: 10px;
+      padding: 3px 8px;
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+      pointer-events:none;
+      white-space: nowrap;
+    }
+
+    .pulse{
+      width:16px; height:16px; background:#ef4444; border-radius:50%;
+      box-shadow: 0 0 0 rgba(239, 68, 68, 0.6);
+      animation: pulse 1.6s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6); }
+      70%{ box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+      100%{ box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    footer{
+      position:absolute; bottom:0; left:0; width:100%;
+      text-align:center; background: rgba(0,0,0,0.35);
+      color:#fff; font-size:0.85rem; padding:8px 0;
+    }
+
+    a{ color:#ffcc33; text-decoration:none; }
+  </style>
+</head>
+
+<body>
+  <div class="panel">
+    <div class="title">Itkhori Sangam Darshan – Route Explorer</div>
+    <div class="sub">
+      Select a mode and generate routes to <b>Maa Bhadrakali Mandir (Itkhori)</b>.
+      Supports both <b>demo visual routes</b> and <b>real road route</b>.
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" id="tabAll" onclick="setMode('all')">Mode 1: All District Routes</button>
+      <button class="tab" id="tabOne" onclick="setMode('one')">Mode 2: Single District Route</button>
+      <button class="tab" id="tabPar" onclick="setMode('parikrama')">Mode 3: Dev Place Parikrama</button>
+    </div>
+
+    <div class="row" id="controlsAll">
+      <button class="btn-run" onclick="showAllRoutes()">Show All Routes (Demo)</button>
+      <button class="btn-net" onclick="toggleAllNetwork()">Show/Hide Lines</button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="row" id="controlsOne" style="display:none;">
+      <select id="districtSelect"></select>
+      <button class="btn-run" onclick="showSingleDemo()">Demo Route</button>
+      <button class="btn-road" onclick="showSingleRoad()">Real Road</button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="row" id="controlsPar" style="display:none;">
+      <button class="btn-run" onclick="showParikramaRoute()">Show Parikrama Route</button>
+      <button class="btn-net" onclick="toggleDevNetwork()">Show/Hide Dev Links</button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="hint" id="note">
+      <b>Mode 1:</b> Shows lines from major districts/cities to Itkhori.<br/>
+      <b>Mode 2:</b> Demo route or real road route (OSRM).<br/>
+      <b>Mode 3:</b> Temple campus parikrama circuit.<br/>
+      More info: <a href="index.html">Back to Main Page</a> and view videos like <b>Intro, Darshan, Gallery</b>.
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <footer>
+    © 2026 Ithkhori – Ek Pahchan | QR / Barcode Enabled Digital Experience
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const BHADRAKALI = { id:"bhadrakali", name:"Maa Bhadrakali Mandir (Itkhori)", lat:24.2728, lon:85.1408 };
+    const districts = [
+      {id:"ranchi",name:"Ranchi",lat:23.3441,lon:85.3096},
+      {id:"hazaribagh",name:"Hazaribagh",lat:23.9966,lon:85.3691},
+      {id:"dhanbad",name:"Dhanbad",lat:23.7957,lon:86.4304},
+      {id:"jamshedpur",name:"Jamshedpur",lat:22.8046,lon:86.2029},
+      {id:"bokaro",name:"Bokaro",lat:23.6693,lon:86.1511},
+      {id:"giridih",name:"Giridih",lat:24.1852,lon:86.2996},
+      {id:"deoghar",name:"Deoghar",lat:24.4821,lon:86.6961},
+      {id:"chatra",name:"Chatra",lat:24.2060,lon:84.8711}
+    ];
+    const districtById = Object.fromEntries(districts.map(d=>[d.id,d]));
+
+    const devPlaces = [
+      {id:"b",name:"Maa Bhadrakali",lat:24.2728,lon:85.1408},
+      {id:"st",name:"Kotheshwar Nath Stupa",lat:24.2734,lon:85.1417},
+      {id:"sa",name:"Sahasralinga",lat:24.2740,lon:85.1397},
+      {id:"s",name:"Shiv Mandir",lat:24.2738,lon:85.1420},
+      {id:"sh",name:"Shani Mandir",lat:24.2752,lon:85.1440},
+      {id:"j",name:"Ram–Janki Mandir",lat:24.2719,lon:85.1450}
+    ];
+    const devById = Object.fromEntries(devPlaces.map(p=>[p.id,p]));
+    const PARIKRAMA_ORDER = ["b","st","sa","s","sh","j","b"];
+
+    const map = L.map('map').setView([23.9,85.5],8);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:20, attribution:"&copy; OpenStreetMap contributors"}).addTo(map);
+
+    const districtLayer = L.layerGroup().addTo(map);
+    const devLayer = L.layerGroup().addTo(map);
+    const routeLayer = L.layerGroup().addTo(map);
+    const netLayer = L.layerGroup().addTo(map);
+
+    // Destination pulse marker
+    const pulseIcon = L.divIcon({className:"", html:`<div class="pulse"></div>`, iconSize:[16,16], iconAnchor:[8,8]});
+    L.marker([BHADRAKALI.lat,BHADRAKALI.lon],{icon:pulseIcon}).addTo(districtLayer).bindPopup(`<b>${BHADRAKALI.name}</b><br/>Destination`).openPopup();
+
+    // District markers + labels
+    districts.forEach(d=>{
+      L.circleMarker([d.lat,d.lon],{radius:7}).addTo(districtLayer)
+        .bindTooltip(d.name,{permanent:true,direction:"right",offset:[10,0],className:"label",interactive:false});
+    });
+
+    // Dropdown
+    const select = document.getElementById("districtSelect");
+    select.innerHTML = `<option value="">Select District / City</option>` + districts.map(d=>`<option value="${d.id}">${d.name}</option>`).join("");
+
+    // Tabs
+    function setMode(mode){
+      ["tabAll","tabOne","tabPar"].forEach(t=>document.getElementById(t).classList.remove("active"));
+      ["controlsAll","controlsOne","controlsPar"].forEach(c=>document.getElementById(c).style.display="none");
+
+      if(mode==="all"){document.getElementById("tabAll").classList.add("active");document.getElementById("controlsAll").style.display="flex";map.setView([23.9,85.5],8);}
+      if(mode==="one"){document.getElementById("tabOne").classList.add("active");document.getElementById("controlsOne").style.display="flex";map.setView([23.9,85.5],8);}
+      if(mode==="parikrama"){document.getElementById("tabPar").classList.add("active");document.getElementById("controlsPar").style.display="flex";map.setView([24.2728,85.1408],14);}
+    }
+
+    // Mode 1: All routes
+    let allVisible = true;
+    function showAllRoutes(){ clearAll(false); districts.forEach(d=>{L.polyline([[d.lat,d.lon],[BHADRAKALI.lat,BHADRAKALI.lon]],{weight:4,opacity:0.85,dashArray:"8 10"}).addTo(routeLayer).bindPopup(`<b>${d.name} → Itkhori</b><br/>Demo Route`);}); const bounds = L.latLngBounds(districts.map(d=>[d.lat,d.lon]).concat([[BHADRAKALI.lat,BHADRAKALI.lon]])); map.fitBounds(bounds.pad(0.2)); }
+    function toggleAllNetwork(){ allVisible = !allVisible; routeLayer.eachLayer(l=>{if(l.setStyle) l.setStyle({opacity:allVisible?0.85:0});}); }
+
+    // Mode 2: Single district
+    function showSingleDemo(){ const id=select.value;if(!id){alert("Select a district/city first.");return;} clearAll(false); const d=districtById[id]; L.polyline([[d.lat,d.lon],[BHADRAKALI.lat,BHADRAKALI.lon]],{weight:6,opacity:0.95}).addTo(routeLayer).bindPopup(`<b>${d.name} → Itkhori</b><br/>Demo Route`); map.fitBounds(L.latLngBounds([[d.lat,d.lon],[BHADRAKALI.lat,BHADRAKALI.lon]]).pad(0.25)); }
+    async function showSingleRoad(){ const id=select.value;if(!id){alert("Select a district/city first.");return;} clearAll(false); const d=districtById[id]; const url=`https://router.project-osrm.org/route/v1/driving/${d.lon},${d.lat};${BHADRAKALI.lon},${BHADRAKALI.lat}?overview=full&geometries=geojson`; try{ const res=await fetch(url); const data=await res.json(); if(!data.routes||!data.routes.length){alert("OSRM route not found. Use Demo Route instead.");return;} const route=data.routes[0]; const km=(route.distance/1000).toFixed(1); const min=(route.duration/60).toFixed(0); const latlngs=route.geometry.coordinates.map(c=>[c[1],c[0]]); L.polyline(latlngs,{weight:7,opacity:0.95}).addTo(routeLayer).bindPopup(`<b>${d.name} → Itkhori (Real Road)</b><br/>Distance: <b>${km} km</b><br/>Time: <b>${min} min</b>`).openPopup(); map.fitBounds(L.latLngBounds(latlngs).pad(0.2)); }catch(e){alert("OSRM error (internet/limit). Use Demo Route.");} }
+
+    // Mode 3: Parikrama
+    let devNetVisible=false;
+    function showParikramaRoute(){ clearAll(true); devPlaces.forEach(p=>{L.circleMarker([p.lat,p.lon],{radius:7}).addTo(devLayer).bindTooltip(p.name,{permanent:true,direction:"right",offset:[10,0],className:"label",interactive:false});}); const latlngs=PARIKRAMA_ORDER.map(id=>[devById[id].lat,devById[id].lon]); L.polyline(latlngs,{weight:7,opacity:0.95}).addTo(routeLayer).bindPopup(`<b>Dev Place Parikrama Circuit</b><br/>${PARIKRAMA_ORDER.map(id=>devById[id].name).join(" → ")}`).openPopup(); map.fitBounds(L.latLngBounds(latlngs).pad(0.3)); }
+    function toggleDevNetwork(){ devNetVisible=!devNetVisible; netLayer.clearLayers(); if(!devNetVisible) return; for(let i=0;i<PARIKRAMA_ORDER.length-1;i++){const A=devById[PARIKRAMA_ORDER[i]],B=devById[PARIKRAMA_ORDER[i+1]]; L.polyline([[A.lat,A.lon],[B.lat,B.lon]],{weight:3,opacity:0.7,dashArray:"6 8"}).addTo(netLayer);} }
+
+    function clearAll(clearDev=true){ routeLayer.clearLayers(); netLayer.clearLayers(); if(clearDev) devLayer.clearLayers(); }
+  </script>
+</body>
+</html>
